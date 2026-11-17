@@ -48,15 +48,26 @@ function saveSort(mode) {
   try { localStorage.setItem(PREF_KEY, mode); } catch { /* private mode: forget it */ }
 }
 
-// Order competitions for the board. Bounties without a usable
-// deadline sort last under "ending soonest" instead of jumping the
-// queue on a NaN comparison.
+// Order competitions for the board. Under "ending soonest" the
+// still-open bounties come first by soonest deadline, then the
+// closed ones by most recent deadline; a bounty without a usable
+// deadline goes last instead of jumping the queue on a NaN
+// comparison. The other modes fall back to that same order on ties.
 function order(list, mode) {
   const rows = [...list];
-  const end = (c) => msLeft(c.deadline) ?? Number.POSITIVE_INFINITY;
-  if (mode === 'prize') rows.sort((a, b) => (b.rewardAmount ?? 0) - (a.rewardAmount ?? 0) || end(a) - end(b));
-  else if (mode === 'entries') rows.sort((a, b) => (b.submissionCount ?? 0) - (a.submissionCount ?? 0) || end(a) - end(b));
-  else rows.sort((a, b) => end(a) - end(b));
+  const end = (c) => msLeft(c.deadline);
+  const byEnding = (a, b) => {
+    const ea = end(a);
+    const eb = end(b);
+    if (ea === null && eb === null) return 0;
+    if (ea === null) return 1;
+    if (eb === null) return -1;
+    if ((ea > 0) !== (eb > 0)) return ea > 0 ? -1 : 1;
+    return ea - eb;
+  };
+  if (mode === 'prize') rows.sort((a, b) => (b.rewardAmount ?? 0) - (a.rewardAmount ?? 0) || byEnding(a, b));
+  else if (mode === 'entries') rows.sort((a, b) => (b.submissionCount ?? 0) - (a.submissionCount ?? 0) || byEnding(a, b));
+  else rows.sort(byEnding);
   return rows;
 }
 

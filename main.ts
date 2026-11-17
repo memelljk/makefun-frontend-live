@@ -71,6 +71,27 @@ function emptyDir(dir) {
   }
 }
 
+// Count a copied tree's files and bytes, so the hand-in can be
+// audited against the gate's app caps here — with the real numbers
+// in the log — instead of tripping them inside the dossier build.
+function treeStats(dir) {
+  let files = 0;
+  let total = 0;
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    const info = statSync(path);
+    if (info.isDirectory()) {
+      const sub = treeStats(path);
+      files += sub.files;
+      total += sub.total;
+    } else {
+      files += 1;
+      total += info.size;
+    }
+  }
+  return { files, total };
+}
+
 // Image sizes read from the bytes: a PNG stores its dimensions in
 // the IHDR chunk (big-endian at bytes 16..24); a JPEG stores them in
 // a start-of-frame segment, reached by walking the marker chain.
@@ -132,6 +153,15 @@ function main() {
     if (!existsSync(join(out, 'app', name))) refuse(`app/${name} missing from the output`);
   }
   console.log(`All ${ENTRY_FILES.length} entry files are in the output`);
+
+  const stats = treeStats(join(out, 'app'));
+  if (stats.files > CAPS.app_max_files) {
+    refuse(`the app holds ${stats.files} files, over the ${CAPS.app_max_files} cap`);
+  }
+  if (stats.total > CAPS.app_max_bytes) {
+    refuse(`the app holds ${stats.total} bytes, over the ${CAPS.app_max_bytes} cap`);
+  }
+  console.log(`App tree inside its caps: ${stats.files} files, ${stats.total} bytes`);
 
   const shots = checkScreenshots(join(out, 'screenshots'));
   console.log(`Screenshots inside their caps: ${shots.join('; ')}`);
